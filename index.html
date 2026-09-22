@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#17212a">
+  <title>داور ماب — خرائط المتاجر الداخلية</title>
+  <meta name="description" content="نموذج تفاعلي لبناء خرائط السوبرماركت وتحديد مواقع المنتجات والملاحة الذكية داخل المتجر.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <header class="topbar">
+      <div class="brand" aria-label="داور ماب">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-name">داور <b>ماب</b></span>
+      </div>
+
+      <nav class="mode-switcher" aria-label="مرحلة العمل">
+        <button class="mode-button is-active" data-mode="build"><span>١</span> بناء المتجر</button>
+        <button class="mode-button" data-mode="products"><span>٢</span> توزيع المنتجات</button>
+        <button class="mode-button" data-mode="navigate"><span>٣</span> التنقّل</button>
+      </nav>
+
+      <div class="command-bar">
+        <button class="icon-button" id="undoButton" title="تراجع" aria-label="تراجع">↷</button>
+        <button class="icon-button" id="redoButton" title="إعادة" aria-label="إعادة">↶</button>
+        <button class="command-button help-command" id="helpButton">؟ دليل الاستخدام</button>
+        <button class="command-button" id="saveButton"><span class="save-dot"></span> حفظ النموذج</button>
+        <span class="demo-badge">وضع العرض</span>
+      </div>
+    </header>
+
+    <aside class="left-panel" id="leftPanel">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow" id="leftEyebrow">مخطط المتجر</span>
+          <h1 id="leftTitle">ابنِ المتجر</h1>
+        </div>
+        <button class="panel-collapse" data-collapse="left" aria-label="طي لوحة الأدوات">›</button>
+      </div>
+
+      <div id="buildPanel" class="mode-panel is-active">
+        <div class="map-actions">
+          <button id="newMapButton">خريطة جديدة</button>
+          <button class="primary-soft" id="loadDemoButton">تحميل متجر تجريبي</button>
+        </div>
+        <div class="mode-guide"><b>ابدأ من هنا</b><span><i>١</i> اختر أداة</span><span><i>٢</i> انقر على الخريطة</span><span><i>٣</i> اسحب العنصر لضبطه</span></div>
+        <p class="panel-note">تلتصق العناصر بالشبكة تلقائيًا. انقر نقرًا مزدوجًا على أي رف لفتح تفاصيله.</p>
+        <div class="tool-list" id="toolList" role="toolbar" aria-label="أدوات الخريطة"></div>
+        <div class="mini-section">
+          <span class="section-label">طبقات المخطط</span>
+          <label class="toggle-row"><span><i class="layer-swatch shelf-swatch"></i> التجهيزات</span><input type="checkbox" checked data-layer="fixtures"></label>
+          <label class="toggle-row"><span><i class="layer-swatch zone-swatch"></i> المناطق والتسميات</span><input type="checkbox" checked data-layer="zones"></label>
+          <label class="toggle-row"><span><i class="layer-swatch route-swatch"></i> شبكة الملاحة</span><input type="checkbox" data-layer="navgrid"></label>
+        </div>
+      </div>
+
+      <div id="productsPanel" class="mode-panel">
+        <label class="search-field">
+          <span aria-hidden="true">⌕</span>
+          <input id="productSearch" type="search" placeholder="ابحث عن منتج أو رمز SKU..." autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </label>
+        <div class="mode-guide compact"><b>طريقة التوزيع</b><span>اسحب المنتج إلى رف، ثم اختر الخانة الدقيقة.</span></div>
+        <div class="catalog-meta"><span><b id="productCount">0</b> منتجًا</span><span>اسحب المنتج إلى رف</span></div>
+        <div class="product-list" id="productList"></div>
+      </div>
+
+      <div id="navigatePanel" class="mode-panel">
+        <div class="nav-intro">
+          <span class="nav-orbit" aria-hidden="true"><i></i></span>
+          <h2>اعثر على أي منتج،<br>حتى موضعه على الرف.</h2>
+          <p>يتحرك المسار داخل الممرات فقط وينتهي عند نقطة الوصول الأقرب للمنتج.</p>
+        </div>
+        <div class="shopping-list">
+          <div class="section-title-row">
+            <span class="section-label">قائمة التسوق</span>
+            <span class="tiny-badge">تجريبي</span>
+          </div>
+          <div id="shoppingItems" class="shopping-items"></div>
+          <button id="optimizeButton" class="button-dark"><span>⌁</span> تحسين مسار القائمة</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="workspace" id="workspace">
+      <div class="canvas-toolbar">
+        <div class="canvas-status">
+          <span class="live-dot"></span>
+          <span id="canvasStatus">الطابق 01 · المتجر التجريبي</span>
+        </div>
+        <div class="view-controls">
+          <button id="panButton" title="تحريك الخريطة" aria-label="تحريك الخريطة">✥</button>
+          <span class="control-divider"></span>
+          <button id="zoomOutButton" aria-label="تصغير">−</button>
+          <button id="zoomValue" class="zoom-value" aria-label="إعادة التكبير إلى 100%">100%</button>
+          <button id="zoomInButton" aria-label="تكبير">+</button>
+          <button id="fitButton" title="ملاءمة الخريطة للشاشة" aria-label="ملاءمة الخريطة للشاشة">⌗</button>
+        </div>
+      </div>
+
+      <section class="map-viewport" id="mapViewport" aria-label="محرر مخطط السوبرماركت">
+        <div class="ruler ruler-x" id="rulerX"></div>
+        <div class="ruler ruler-y" id="rulerY"></div>
+        <div class="map-surface" id="mapSurface">
+          <div class="plan-title-block">
+            <span>مختبر داور للتجزئة / الطابق 01</span>
+            <b>مخطط السوبرماركت</b>
+            <small>مقياس 1:100 · إصدار 04</small>
+          </div>
+          <div class="map-elements" id="mapElements"></div>
+          <svg class="route-layer" id="routeLayer" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <filter id="routeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+                <feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+              </filter>
+            </defs>
+            <path id="routeHalo" class="route-halo" d=""></path>
+            <path id="routePath" class="route-path" d=""></path>
+            <g id="routePins"></g>
+          </svg>
+          <div class="selection-box" id="selectionBox" hidden>
+            <button class="rotate-handle" id="rotateHandle" title="تدوير 90 درجة" aria-label="تدوير العنصر المحدد">↻</button>
+            <i class="resize-handle nw" data-resize="nw"></i><i class="resize-handle ne" data-resize="ne"></i>
+            <i class="resize-handle sw" data-resize="sw"></i><i class="resize-handle se" data-resize="se"></i>
+          </div>
+        </div>
+
+        <div class="navigation-search" id="navigationSearch">
+          <div class="search-kicker"><span></span> البحث الذكي</div>
+          <label>
+            <span class="search-big-icon">⌕</span>
+            <input id="navigationInput" placeholder="ما المنتج الذي تبحث عنه؟" autocomplete="off">
+            <kbd>Enter</kbd>
+          </label>
+          <div class="search-suggestions" id="searchSuggestions"></div>
+        </div>
+
+        <div class="navigation-card" id="navigationCard">
+          <button class="close-card" id="closeRouteButton" aria-label="إغلاق المسار">×</button>
+          <span class="eyebrow">أسرع مسار</span>
+          <div class="nav-product-row">
+            <div class="product-avatar" id="navProductAvatar">ن</div>
+            <div><h3 id="navProductName">نوتيلا 350غ</h3><p id="navProductLocation">الممر 04 · الرف S-17</p></div>
+          </div>
+          <div class="route-metrics"><b id="routeDistance">120 م</b><span id="routeTime">حوالي دقيقة مشيًا</span></div>
+          <ol id="routeSteps" class="route-steps"></ol>
+          <button class="primary-button" id="viewShelfButton">عرض موضع المنتج على الرف <span>←</span></button>
+        </div>
+
+        <div class="destination-tip" id="destinationTip">
+          <span class="destination-dot"></span>
+          <div><b>منتجك هنا</b><small id="destinationText">الممر 04 · الرف S-17 · القسم B · المستوى 3</small></div>
+        </div>
+
+        <div class="canvas-legend">
+          <span><i class="legend-fixture"></i> تجهيزات</span>
+          <span><i class="legend-walk"></i> مسار متاح</span>
+          <span><i class="legend-destination"></i> الوجهة</span>
+        </div>
+      </section>
+
+      <section class="shelf-workspace" id="shelfWorkspace" aria-label="محرر تفاصيل الرف">
+        <div class="shelf-toolbar">
+          <div class="breadcrumbs"><span>المتجر</span><i>/</i><span id="crumbAisle">الممر 04</span><i>/</i><span id="crumbShelf">الرف S-17</span><i>/</i><b>الواجهة A</b></div>
+          <button id="backToPlanButton">العودة إلى المخطط ←</button>
+        </div>
+        <div class="shelf-stage">
+          <div class="shelf-stage-heading">
+            <div><span class="eyebrow">الواجهة الأمامية / الجانب A</span><h2 id="shelfDetailTitle">الرف S-17</h2></div>
+            <div class="shelf-config">
+              <label>الأقسام <input id="sectionsInput" type="number" min="1" max="6" value="4"></label>
+              <span>×</span>
+              <label>المستويات <input id="levelsInput" type="number" min="1" max="6" value="5"></label>
+            </div>
+          </div>
+          <div class="placement-banner" id="placementBanner"><span class="drag-token" id="pendingProductToken">ن</span><div><b id="pendingProductName">نوتيلا 350غ</b><small>اسحب المنتج إلى الخانة الدقيقة، أو انقر على الخانة</small></div><span class="banner-arrow">←</span></div>
+          <div class="shelf-elevation-wrap">
+            <div class="shelf-side-label side-left">الجانب A</div>
+            <div class="shelf-elevation" id="shelfElevation"></div>
+            <div class="shelf-side-label side-right">نهاية الرف</div>
+          </div>
+          <div class="location-readout">
+            <span>الموقع المحدد</span>
+            <strong id="locationCode">A04-S17-A-B-L03-P02</strong>
+            <small id="locationDescription">الممر 04 · الرف S-17 · القسم B · المستوى 03 · الموضع 02</small>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="right-panel" id="rightPanel">
+      <div class="panel-heading inspector-heading">
+        <div><span class="eyebrow">خصائص العنصر</span><h2 id="inspectorTitle">مخطط المتجر</h2></div>
+        <button class="panel-collapse" data-collapse="right" aria-label="طي لوحة الخصائص">‹</button>
+      </div>
+      <div id="inspectorContent" class="inspector-content"></div>
+    </aside>
+
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    <div class="context-menu" id="contextMenu" role="menu">
+      <button data-context="duplicate">إنشاء نسخة <kbd>Ctrl D</kbd></button>
+      <button data-context="rotate">تدوير 90° <kbd>R</kbd></button>
+      <span></span>
+      <button class="danger" data-context="delete">حذف <kbd>⌫</kbd></button>
+    </div>
+    <div class="help-popover" id="helpPopover" aria-hidden="true">
+      <div class="help-head"><div><span class="eyebrow">دليل سريع</span><h2>من المخطط إلى المنتج</h2></div><button id="closeHelpButton" aria-label="إغلاق الدليل">×</button></div>
+      <ol class="help-steps">
+        <li><i>١</i><div><b>ابنِ مخطط المتجر</b><span>اختر أداة ثم انقر على الخريطة. اسحب العنصر أو استخدم مقابض تغيير الحجم.</span></div></li>
+        <li><i>٢</i><div><b>وزّع المنتجات</b><span>اسحب المنتج إلى رف، ثم اختر القسم والمستوى والموضع الدقيق.</span></div></li>
+        <li><i>٣</i><div><b>ابدأ الملاحة</b><span>ابحث عن المنتج وسيظهر أقصر مسار متاح من المدخل الرئيسي.</span></div></li>
+      </ol>
+      <div class="help-tip"><b>نصيحة:</b> انقر نقرًا مزدوجًا على الرف لفتح واجهته الأمامية، وانقر بزر الفأرة الأيمن لعرض إجراءات سريعة.</div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="navigation.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
