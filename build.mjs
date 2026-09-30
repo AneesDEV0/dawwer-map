@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = process.cwd();
-const sourceFiles = ["index.html", "styles.css", "data.js", "navigation.js", "app.js"];
+const sourceFiles = ["index.html", "styles.css", "shopper.css", "data.js", "navigation.js", "app.js", "shopper.js"];
 const files = {};
 
 for (const filename of sourceFiles) {

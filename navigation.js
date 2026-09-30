@@ -1,168 +1,92 @@
 (function () {
-  const GRID = 10;
-  const WIDTH = 1200;
-  const HEIGHT = 720;
-  const COLS = Math.ceil(WIDTH / GRID);
-  const ROWS = Math.ceil(HEIGHT / GRID);
-  const obstacleTypes = new Set(["shelf", "wall", "freezer", "fridge", "checkout", "obstacle"]);
-
-  function key(x, y) { return `${x},${y}`; }
-  function toCell(point) {
-    return {
-      x: Math.max(0, Math.min(COLS - 1, Math.round(point.x / GRID))),
-      y: Math.max(0, Math.min(ROWS - 1, Math.round(point.y / GRID)))
-    };
+  'use strict';
+  // Existing API coordinates are centimetres. One grid cell is 10 cm.
+  const GRID = 10, WIDTH = 1200, HEIGHT = 720;
+  const obstacleTypes = new Set(['shelf','wall','freezer','fridge','checkout','obstacle']);
+  const key = (x,y) => `${x},${y}`;
+  function localPoint(p,e) {
+    const a=-(e.rotation||0)*Math.PI/180, dx=p.x-e.x-e.w/2, dy=p.y-e.y-e.h/2;
+    return {x:dx*Math.cos(a)-dy*Math.sin(a),y:dx*Math.sin(a)+dy*Math.cos(a)};
   }
-  function toPoint(cell) { return { x: cell.x * GRID, y: cell.y * GRID }; }
-
-  function buildBlocked(elements, padding = 7) {
-    const blocked = new Set();
-    elements.filter(element => obstacleTypes.has(element.type)).forEach(element => {
-      const isWall = element.type === "wall";
-      const inset = isWall ? 0 : padding;
-      const minX = Math.max(0, Math.floor((element.x - inset) / GRID));
-      const maxX = Math.min(COLS - 1, Math.ceil((element.x + element.w + inset) / GRID));
-      const minY = Math.max(0, Math.floor((element.y - inset) / GRID));
-      const maxY = Math.min(ROWS - 1, Math.ceil((element.y + element.h + inset) / GRID));
-      for (let y = minY; y <= maxY; y += 1) {
-        for (let x = minX; x <= maxX; x += 1) blocked.add(key(x, y));
-      }
-    });
+  function worldPoint(p,e) {
+    const a=(e.rotation||0)*Math.PI/180;
+    return {x:e.x+e.w/2+p.x*Math.cos(a)-p.y*Math.sin(a),y:e.y+e.h/2+p.x*Math.sin(a)+p.y*Math.cos(a)};
+  }
+  function buildBlocked(elements,padding=7) {
+    const blocked=new Set();
+    for(const e of elements.filter(e=>obstacleTypes.has(e.type))) {
+      const radius=Math.hypot(e.w,e.h)/2+padding+GRID, cx=e.x+e.w/2, cy=e.y+e.h/2;
+      for(let y=Math.max(0,Math.floor((cy-radius)/GRID));y<=Math.min(HEIGHT/GRID,Math.ceil((cy+radius)/GRID));y++)
+        for(let x=Math.max(0,Math.floor((cx-radius)/GRID));x<=Math.min(WIDTH/GRID,Math.ceil((cx+radius)/GRID));x++) {
+          const p=localPoint({x:x*GRID,y:y*GRID},e);
+          if(Math.abs(p.x)<=e.w/2+padding+GRID/2 && Math.abs(p.y)<=e.h/2+padding+GRID/2) blocked.add(key(x,y));
+        }
+    }
     return blocked;
   }
-
-  function nearestWalkable(cell, blocked) {
-    if (!blocked.has(key(cell.x, cell.y))) return cell;
-    for (let radius = 1; radius < 9; radius += 1) {
-      for (let y = cell.y - radius; y <= cell.y + radius; y += 1) {
-        for (let x = cell.x - radius; x <= cell.x + radius; x += 1) {
-          if (x < 0 || x >= COLS || y < 0 || y >= ROWS) continue;
-          if (!blocked.has(key(x, y))) return { x, y };
-        }
+  function findPath(startPoint,endPoint,elements,existingBlocked) {
+    if(!startPoint||!endPoint) return [];
+    const blocked=existingBlocked||buildBlocked(elements);
+    const start={x:Math.round(startPoint.x/GRID),y:Math.round(startPoint.y/GRID)}, end={x:Math.round(endPoint.x/GRID),y:Math.round(endPoint.y/GRID)};
+    const valid=p=>p.x>=0&&p.x<=WIDTH/GRID&&p.y>=0&&p.y<=HEIGHT/GRID&&!blocked.has(key(p.x,p.y));
+    if(!valid(start)||!valid(end)) return [];
+    const queue=[start],seen=new Set([key(start.x,start.y)]),parents=new Map();
+    for(let head=0;head<queue.length;head++) {
+      const p=queue[head];
+      if(p.x===end.x&&p.y===end.y) {
+        const path=[];let current=p;
+        while(current){path.push({x:current.x*GRID,y:current.y*GRID});current=parents.get(key(current.x,current.y));}
+        return simplify(path.reverse());
+      }
+      for(const [dx,dy] of [[0,-1],[1,0],[-1,0],[0,1]]) {
+        const n={x:p.x+dx,y:p.y+dy},k=key(n.x,n.y);
+        if(!valid(n)||seen.has(k)) continue;
+        seen.add(k);parents.set(k,p);queue.push(n);
       }
     }
-    return cell;
+    return []; // Never fall back to a line through obstacles.
   }
-
-  function getAccessPoint(element, fromPoint, blocked) {
-    const candidates = [
-      { x: element.x + element.w / 2, y: element.y + element.h + GRID },
-      { x: element.x + element.w / 2, y: element.y - GRID },
-      { x: element.x - GRID, y: element.y + element.h / 2 },
-      { x: element.x + element.w + GRID, y: element.y + element.h / 2 }
-    ];
-    const ranked = candidates
-      .map(point => {
-        const cell = nearestWalkable(toCell(point), blocked);
-        const resolved = toPoint(cell);
-        const approach = Math.hypot(resolved.x - fromPoint.x, resolved.y - fromPoint.y);
-        const displacement = Math.hypot(resolved.x - point.x, resolved.y - point.y);
-        return { point, cell, resolved, score: approach + displacement * 4 };
-      })
-      .filter(item => !blocked.has(key(item.cell.x, item.cell.y)))
-      .sort((a, b) => a.score - b.score);
-    return ranked.length ? toPoint(ranked[0].cell) : { x: element.x + element.w / 2, y: element.y + element.h + GRID };
+  function simplify(points){return points.filter((p,i)=>!i||i===points.length-1||(p.x-points[i-1].x)*(points[i+1].y-p.y)!==(p.y-points[i-1].y)*(points[i+1].x-p.x));}
+  function pathDistance(points){return points.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-points[i].x,p.y-points[i].y),0);}
+  // A is the left long face at 0 degrees, B the opposite. RTL does not change geometry.
+  function getAccessPoint(e,fromPoint,blocked,side='A',section='B') {
+    const index=Math.max(0,Math.min((e.sections||4)-1,section.charCodeAt(0)-65));
+    const along=-e.h/2+(index+.5)*e.h/(e.sections||4);
+    const p=worldPoint({x:(side==='B'?1:-1)*(e.w/2+22),y:side==='B'?-along:along},e);
+    const point={x:Math.round(p.x/GRID)*GRID,y:Math.round(p.y/GRID)*GRID};
+    return blocked.has(key(point.x/GRID,point.y/GRID))?null:point;
   }
-
-  function findPath(startPoint, endPoint, elements) {
-    const blocked = buildBlocked(elements);
-    const start = nearestWalkable(toCell(startPoint), blocked);
-    const end = nearestWalkable(toCell(endPoint), blocked);
-    blocked.delete(key(start.x, start.y));
-    blocked.delete(key(end.x, end.y));
-
-    const open = [{ ...start, g: 0, f: Math.abs(end.x - start.x) + Math.abs(end.y - start.y) }];
-    const cameFrom = new Map();
-    const gScore = new Map([[key(start.x, start.y), 0]]);
-    const closed = new Set();
-    const directions = [[1,0],[-1,0],[0,1],[0,-1]];
-
-    while (open.length) {
-      open.sort((a, b) => a.f - b.f);
-      const current = open.shift();
-      const currentKey = key(current.x, current.y);
-      if (current.x === end.x && current.y === end.y) {
-        const path = [{ x: current.x, y: current.y }];
-        let traceKey = currentKey;
-        while (cameFrom.has(traceKey)) {
-          const previous = cameFrom.get(traceKey);
-          path.unshift(previous);
-          traceKey = key(previous.x, previous.y);
-        }
-        return simplifyPath(path.map(toPoint));
-      }
-      closed.add(currentKey);
-      for (const [dx, dy] of directions) {
-        const nx = current.x + dx;
-        const ny = current.y + dy;
-        const neighborKey = key(nx, ny);
-        if (nx < 2 || nx >= COLS - 2 || ny < 2 || ny >= ROWS - 1 || blocked.has(neighborKey) || closed.has(neighborKey)) continue;
-        const tentative = current.g + 1;
-        if (tentative >= (gScore.get(neighborKey) ?? Infinity)) continue;
-        cameFrom.set(neighborKey, { x: current.x, y: current.y });
-        gScore.set(neighborKey, tentative);
-        const heuristic = Math.abs(end.x - nx) + Math.abs(end.y - ny);
-        const existing = open.find(node => node.x === nx && node.y === ny);
-        if (existing) { existing.g = tentative; existing.f = tentative + heuristic; }
-        else open.push({ x: nx, y: ny, g: tentative, f: tentative + heuristic });
-      }
+  function getRoute(store,shelf,location={},origin=store.entrance) {
+    const blocked=buildBlocked(store.elements),accessPoint=location.accessPoint||shelf.accessPoints?.[location.side||'A']||getAccessPoint(shelf,origin,blocked,location.side||'A',location.section||'B');
+    const points=findPath(origin,accessPoint,store.elements,blocked),distance=pathDistance(points);
+    return {points,accessPoint,distance,meters:distance*(store.metersPerUnit||.01),reachable:points.length>0};
+  }
+  function getMultiStopRoute(store,entries,origin=store.entrance) {
+    let current=origin;const remaining=entries.slice(),ordered=[],points=[],unreachable=[];
+    while(remaining.length) {
+      const ranked=remaining.map(entry=>({entry,route:getRoute(store,entry.shelf||entry,entry.location||{},current)})).filter(x=>x.route.reachable).sort((a,b)=>a.route.distance-b.route.distance);
+      if(!ranked.length){unreachable.push(...remaining);break;}
+      const {entry,route}=ranked[0];ordered.push(entry);points.push(...(points.length?route.points.slice(1):route.points));current=route.accessPoint;remaining.splice(remaining.indexOf(entry),1);
     }
-    return [startPoint, endPoint];
+    return {points,ordered,unreachable,distance:pathDistance(points)};
   }
-
-  function simplifyPath(points) {
-    if (points.length < 3) return points;
-    const simplified = [points[0]];
-    for (let index = 1; index < points.length - 1; index += 1) {
-      const previous = points[index - 1];
-      const current = points[index];
-      const next = points[index + 1];
-      const directionA = { x: current.x - previous.x, y: current.y - previous.y };
-      const directionB = { x: next.x - current.x, y: next.y - current.y };
-      if (directionA.x !== directionB.x || directionA.y !== directionB.y) simplified.push(current);
+  function validate(store) {
+    const issues=[];
+    for(const p of store.products) if(!store.locations.some(l=>l.productId===p.id)) issues.push({kind:'unlocated',message:`${p.name}: بلا موقع`});
+    for(const l of store.locations) {
+      const shelf=store.elements.find(e=>e.shelfId===l.shelf);
+      if(!shelf){issues.push({kind:'missing',message:`${l.shelf}: وحدة العرض غير موجودة`});continue;}
+      if(!['A','B'].includes(l.side)||l.level<1||l.level>shelf.levels||l.position<1||l.position>3||!/^[A-F]$/.test(l.section)||l.section.charCodeAt(0)-65>=shelf.sections) issues.push({kind:'bounds',message:`${l.shelf}: خانة خارج حدود الرف`});
+      if(!getRoute(store,shelf,l).reachable) issues.push({kind:'unreachable',message:`${l.shelf} / ${l.side}: موقع غير قابل للوصول`});
     }
-    simplified.push(points[points.length - 1]);
-    return simplified;
-  }
-
-  function pathDistance(points) {
-    return points.slice(1).reduce((distance, point, index) => distance + Math.hypot(point.x - points[index].x, point.y - points[index].y), 0);
-  }
-
-  function getRoute(store, shelf) {
-    const blocked = buildBlocked(store.elements);
-    const accessPoint = getAccessPoint(shelf, store.entrance, blocked);
-    const points = findPath(store.entrance, accessPoint, store.elements);
-    return { points, accessPoint, distance: pathDistance(points) };
-  }
-
-  function getMultiStopRoute(store, shelves) {
-    let current = store.entrance;
-    const remaining = shelves.slice();
-    const ordered = [];
-    const points = [current];
-    while (remaining.length) {
-      remaining.sort((a, b) => {
-        const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
-        const bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-        return Math.hypot(ac.x - current.x, ac.y - current.y) - Math.hypot(bc.x - current.x, bc.y - current.y);
-      });
-      const shelf = remaining.shift();
-      const blocked = buildBlocked(store.elements);
-      const access = getAccessPoint(shelf, current, blocked);
-      const segment = findPath(current, access, store.elements);
-      points.push(...segment.slice(1));
-      ordered.push(shelf);
-      current = access;
+    const fixtures=store.elements.filter(e=>obstacleTypes.has(e.type)&&e.type!=='wall');
+    const corners=e=>[[-1,-1],[1,-1],[1,1],[-1,1]].map(([x,y])=>worldPoint({x:x*e.w/2,y:y*e.h/2},e));
+    function overlaps(a,b) {
+      const aa=corners(a),bb=corners(b);
+      return [aa,bb].every(poly=>poly.every((p,i)=>{const q=poly[(i+1)%4],axis={x:-(q.y-p.y),y:q.x-p.x};const ap=aa.map(v=>v.x*axis.x+v.y*axis.y),bp=bb.map(v=>v.x*axis.x+v.y*axis.y);return Math.max(...ap)>Math.min(...bp)&&Math.max(...bp)>Math.min(...ap);}));
     }
-    const checkout = store.elements.find(element => element.type === "checkout");
-    if (checkout) {
-      const blocked = buildBlocked(store.elements);
-      const checkoutAccess = getAccessPoint(checkout, current, blocked);
-      points.push(...findPath(current, checkoutAccess, store.elements).slice(1));
-    }
-    return { points, ordered, distance: pathDistance(points) };
+    fixtures.forEach((a,i)=>fixtures.slice(i+1).forEach(b=>{if(overlaps(a,b)) issues.push({kind:'overlap',message:`تداخل بين ${a.shelfId||a.id} و${b.shelfId||b.id}`});}));
+    return issues;
   }
-
-  window.DawerNavigation = { GRID, buildBlocked, getAccessPoint, findPath, getRoute, getMultiStopRoute, pathDistance };
+  window.DawerNavigation={GRID,buildBlocked,getAccessPoint,findPath,getRoute,getMultiStopRoute,pathDistance,validate,localPoint,worldPoint};
 })();

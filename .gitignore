@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build and server outputs
+dist/
+
+# Test & QA outputs
+output/
+tmp/
+.openai/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+*.log

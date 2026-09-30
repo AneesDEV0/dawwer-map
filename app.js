@@ -5,7 +5,7 @@
   const navigation = window.DawerNavigation;
   const $ = selector => document.querySelector(selector);
   const $$ = selector => Array.from(document.querySelectorAll(selector));
-  const snap = value => Math.round(value / 10) * 10;
+  const snap = value => $("#snapEnabled")?.checked === false ? Math.round(value) : Math.round(value / 10) * 10;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
   const dom = {
@@ -125,7 +125,7 @@
     dom.productCount.textContent = list.length;
     dom.productList.innerHTML = list.map(product => `
       <article class="product-card" draggable="true" data-product-id="${product.id}" tabindex="0" aria-label="اسحب ${escapeHtml(product.name)} إلى رف">
-        <span class="product-thumb" style="background:${product.color}">${product.initials}</span>
+        ${window.DawerShopper ? window.DawerShopper.art(product, true) : `<span class="product-thumb" style="background:${product.color}">▣</span>`}
         <div><h3>${escapeHtml(product.name)}</h3><p>${product.sku} · ${escapeHtml(product.category)}</p></div>
         <span class="drag-dots" aria-hidden="true">⠿</span>
       </article>`).join("") || `<div class="inspector-empty"><b>لم نجد منتجات</b><p>جرّب اسم المنتج أو رمز SKU أو اسم الفئة.</p></div>`;
@@ -140,7 +140,7 @@
   }
 
   function objectMarkup(element) {
-    const common = `class="map-object ${element.type}" data-id="${element.id}" data-layer="${element.type === "zone" || element.type === "text" || element.type === "aisle" ? "zones" : "fixtures"}" style="left:${element.x}px;top:${element.y}px;width:${element.w}px;height:${element.h}px;transform:rotate(${element.rotation || 0}deg)"`;
+    const common = `class="map-object ${element.type}" data-id="${escapeHtml(element.id)}" tabindex="0" role="button" aria-label="${escapeHtml(element.shelfId || element.label || typeLabel(element.type))}" data-layer="${element.type === "zone" || element.type === "text" || element.type === "aisle" ? "zones" : "fixtures"}" style="left:${element.x}px;top:${element.y}px;width:${element.w}px;height:${element.h}px;transform:rotate(${element.rotation || 0}deg)"`;
     if (element.type === "shelf") {
       return `<div ${common} title="انقر نقرًا مزدوجًا لفتح ${escapeHtml(element.shelfId)}">
         <i class="shelf-end"></i><i class="shelf-end"></i><span class="side-tag">A</span><span class="side-tag b">B</span>
@@ -205,8 +205,10 @@
       dom.inspector.innerHTML = `<div class="inspector-empty">
         <div class="empty-diagram"></div><b>اختر عنصرًا من الخريطة</b><p>ستظهر هنا أبعاده وإعداداته. انقر نقرًا مزدوجًا على الرف لتحديد مواقع المنتجات.</p>
       </div><div class="inspector-group"><div class="property-row"><span>العناصر</span><b>${state.store.elements.length}</b></div><div class="property-row"><span>الرفوف</span><b>${shelves}</b></div><div class="property-row"><span>الشبكة</span><b>التقاط كل 10 سم</b></div></div>`;
+      dom.shell.classList.add("inspector-idle");
       return;
     }
+    dom.shell.classList.remove("inspector-idle");
     dom.inspectorTitle.textContent = element.type === "shelf" ? `الرف ${element.shelfId}` : typeLabel(element.type);
     const identityTitle = element.type === "shelf" ? `الرف ${element.shelfId}` : typeLabel(element.type);
     const identityMeta = element.type === "shelf" ? `الممر ${element.aisle} · الجانبان A / B` : (element.label || "عنصر في الخريطة");
@@ -216,6 +218,8 @@
     <div class="inspector-group">
       <div class="inspector-group-title"><span>الأبعاد والموضع</span><span>شبكة 10</span></div>
       <div class="field-grid">
+        <div class="inspector-field full"><label>اسم العنصر</label><input data-property="label" value="${escapeHtml(element.label || "")}"></div>
+        <div class="property-row"><span>المعرّف</span><bdi>${escapeHtml(element.id)}</bdi></div>
         <div class="inspector-field"><label>العرض</label><input data-property="w" type="number" min="20" value="${Math.round(element.w)}"></div>
         <div class="inspector-field"><label>العمق / الارتفاع</label><input data-property="h" type="number" min="20" value="${Math.round(element.h)}"></div>
         <div class="inspector-field"><label>المحور X</label><input data-property="x" type="number" value="${Math.round(element.x)}"></div>
@@ -232,17 +236,19 @@
     <div class="inspector-actions">
       ${element.type === "shelf" ? `<button class="action-primary" data-action="split-shelf">فتح الرف وتقسيمه</button>` : ""}
       <button data-action="duplicate">إنشاء نسخة</button><button data-action="rotate">تدوير 90°</button>
+      <button data-action="front">إلى الأمام</button><button data-action="back">إلى الخلف</button>
       <button class="action-danger" data-action="delete">حذف</button>
     </div>`;
   }
 
   function renderProductInspector(productId) {
+    dom.shell.classList.remove("inspector-idle");
     const product = productById(productId);
     const location = locationForProduct(productId);
     if (!product) return;
     dom.inspectorTitle.textContent = product.shortName;
     dom.inspector.innerHTML = `<div class="inspector-group">
-      <div class="object-identity"><span class="product-avatar" style="background:${product.color}">${product.initials}</span><div><h3>${escapeHtml(product.name)}</h3><p>${product.sku} · ${escapeHtml(product.category)}</p></div></div>
+      <div class="object-identity">${window.DawerShopper ? window.DawerShopper.art(product, true) : '<span>▣</span>'}<div><h3>${escapeHtml(product.name)}</h3><p>${product.sku} · ${escapeHtml(product.category)}</p></div></div>
     </div>
     ${location ? `<div class="inspector-group"><div class="inspector-group-title"><span>الموقع داخل المتجر</span><span>محدّث</span></div>
       <div class="property-row"><span>الممر</span><b>${location.aisle}</b></div><div class="property-row"><span>الرف</span><b>${location.shelf}</b></div>
@@ -273,7 +279,7 @@
 
   function fitToScreen(animated = false) {
     const rect = dom.viewport.getBoundingClientRect();
-    state.zoom = clamp(Math.min((rect.width - 90) / 1200, (rect.height - 105) / 720), .45, 1.15);
+    state.zoom = clamp(Math.min((rect.width - 45) / 1200, (rect.height - 85) / 720), .15, 1.15);
     state.pan.x = (rect.width - 1200 * state.zoom) / 2;
     state.pan.y = (rect.height - 720 * state.zoom) / 2 + 15;
     applyTransform(animated);
@@ -373,7 +379,7 @@
     };
     const preset = presets[type] || presets.shelf;
     const normalizedType = type === "double-shelf" ? "shelf" : type;
-    const element = { id, type: normalizedType, x: snap(point.x - preset.w / 2), y: snap(point.y - preset.h / 2), w: preset.w, h: preset.h, rotation: 0, ...preset };
+    const element = { id, type: normalizedType, x: clamp(snap(point.x - preset.w / 2), 0, 1200 - preset.w), y: clamp(snap(point.y - preset.h / 2), 0, 720 - preset.h), w: preset.w, h: preset.h, rotation: 0, ...preset };
     if (normalizedType === "shelf") {
       const numbers = state.store.elements.filter(item => item.type === "shelf").map(item => Number(String(item.shelfId).replace(/\D/g, "")) || 0);
       element.shelfId = `S-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
@@ -458,7 +464,7 @@
     dom.sectionsInput.value = shelf.sections;
     dom.levelsInput.value = shelf.levels;
     dom.shelfElevation.style.gridTemplateColumns = `repeat(${shelf.sections}, minmax(0, 1fr))`;
-    const placed = productsOnShelf(shelf.shelfId);
+    const placed = productsOnShelf(shelf.shelfId).filter(l => (l.side || "A") === $("#shelfSide").value);
     let markup = "";
     for (let sectionIndex = 0; sectionIndex < shelf.sections; sectionIndex += 1) {
       const section = String.fromCharCode(65 + sectionIndex);
@@ -470,7 +476,7 @@
           const product = location ? productById(location.productId) : null;
           const highlighted = product && product.id === state.highlightedProductId;
           markup += `<div class="position-slot ${highlighted ? "is-highlighted" : ""}" data-section="${section}" data-level="${visualLevel}" data-position="${position}" tabindex="0">`;
-          if (product) markup += `<button class="cell-product" data-product-id="${product.id}" title="${escapeHtml(product.name)} · ${locationCode(location)}"><span class="cell-product-thumb" style="background:${product.color}">${product.initials}</span><span><b>${escapeHtml(product.shortName)}</b><small>${product.sku}</small></span></button>`;
+          if (product) markup += `<button class="cell-product" data-product-id="${product.id}" title="${escapeHtml(product.name)} · ${locationCode(location)}">${window.DawerShopper ? window.DawerShopper.art(product, true) : '<span>▣</span>'}</button>`;
           markup += `</div>`;
         }
         markup += `</div>`;
@@ -493,18 +499,22 @@
     const shelf = elementById(state.currentShelfId);
     if (!shelf) return;
     state.selectedPosition = position;
-    const location = { aisle: shelf.aisle, shelf: shelf.shelfId, side: "A", ...position };
+    const location = { aisle: shelf.aisle, shelf: shelf.shelfId, ...position, side: $("#shelfSide").value };
     $("#locationCode").textContent = locationCode(location);
-    $("#locationDescription").textContent = `الممر ${shelf.aisle} · الرف ${shelf.shelfId} · القسم ${position.section} · المستوى ${String(position.level).padStart(2,"0")} · الموضع ${String(position.position).padStart(2,"0")}`;
+    $("#locationDescription").textContent = `الممر ${shelf.aisle} · الرف ${shelf.shelfId} · الواجهة ${location.side} · القسم ${position.section} · المستوى ${position.level} من أسفل · الموضع ${position.position}`;
   }
 
   function placeProduct(productId, position) {
     const shelf = elementById(state.currentShelfId);
     const product = productById(productId);
     if (!shelf || !product) return;
+    const side = $("#shelfSide").value;
+    const occupied = state.store.locations.find(l => l.shelf === shelf.shelfId && l.side === side && l.section === position.section && +l.level === +position.level && +l.position === +position.position);
+    if (occupied && occupied.productId !== productId) return showToast("الخانة مشغولة", "اختر خانة فارغة؛ لن نحذف موقع منتج آخر.", "!");
     rememberSnapshot();
-    state.store.locations = state.store.locations.filter(location => location.productId !== productId && !(location.shelf === shelf.shelfId && location.section === position.section && Number(location.level) === Number(position.level) && Number(location.position) === Number(position.position)));
-    const location = { productId, aisle: shelf.aisle, shelf: shelf.shelfId, side: "A", section: position.section, level: Number(position.level), position: Number(position.position) };
+    if (!$("#additionalLocation").checked) state.store.locations = state.store.locations.filter(location => location.productId !== productId);
+    else if (occupied) return showToast("الموقع موجود", "هذا المنتج موزّع بالفعل في هذه الخانة.", "!");
+    const location = { productId, aisle: shelf.aisle, shelf: shelf.shelfId, side, section: position.section, level: Number(position.level), position: Number(position.position) };
     state.store.locations.push(location);
     state.pendingProductId = null;
     state.highlightedProductId = productId;
@@ -516,6 +526,7 @@
   }
 
   function setMode(mode) {
+    if (mode === "navigate" && window.DawerShopper) return window.DawerShopper.show();
     state.mode = mode;
     state.activeTool = "select";
     state.panTool = false;
@@ -716,7 +727,8 @@
   }
 
   function saveDemo() {
-    localStorage.setItem("dawer-map-demo", snapshot());
+    try { localStorage.setItem("dawer-map-demo", snapshot()); }
+    catch { return showToast("تعذّر الحفظ", "لا توجد مساحة تخزين متاحة. احتفظ بهذه الجلسة مفتوحة.", "!"); }
     showToast("تم حفظ النموذج", "حُفظت الخريطة ومواقع المنتجات على هذا الجهاز.", "✓");
   }
 
@@ -772,6 +784,9 @@
       event.stopPropagation();
       const element = elementById(node.dataset.id);
       if (!element) return;
+      if (state.mode === "products" && state.pendingProductId && element.type === "shelf") {
+        openShelfDetail(element.id, { pendingProductId: state.pendingProductId }); return;
+      }
       if (state.activeTool === "delete" && state.mode === "build") { selectElement(element.id); deleteSelected(); return; }
       selectElement(element.id);
       startObjectDrag(event, element);
@@ -846,6 +861,8 @@
     dom.productList.addEventListener("click", event => {
       const card = event.target.closest("[data-product-id]"); if (!card) return;
       state.selectedProductId = card.dataset.productId; state.selectedElementId = null; updateSelectionBox(); renderProductInspector(card.dataset.productId);
+      state.pendingProductId = card.dataset.productId;
+      showToast("تم اختيار المنتج", "اضغط على الرف لتحديد موقعه، أو اسحب المنتج إليه.", "←");
     });
 
     $("#backToPlanButton").addEventListener("click", closeShelfDetail);
@@ -871,10 +888,18 @@
 
     dom.inspector.addEventListener("change", event => {
       const input = event.target.closest("[data-property]"); const element = selectedElement(); if (!input || !element) return;
+      if (input.dataset.property === "shelfId" && state.store.elements.some(e => e.id !== element.id && e.shelfId === input.value)) {
+        input.value = element.shelfId; return showToast("رمز مستخدم بالفعل", "اختر رمزًا فريدًا لوحدة العرض.", "!");
+      }
       rememberSnapshot();
       const property = input.dataset.property;
       const oldShelfId = element.shelfId;
       element[property] = input.type === "number" ? Number(input.value) : input.value;
+      if (input.type === "number") {
+        const ranges = { w: [8,1200], h: [8,720], x: [0,1200-element.w], y: [0,720-element.h], rotation: [-360,360], sections: [1,6], levels: [1,6] };
+        const range = ranges[property] || [0,1200]; element[property] = clamp(Number.isFinite(element[property]) ? element[property] : range[0], ...range);
+        if (["sections","levels"].includes(property)) element[property] = Math.round(element[property]);
+      }
       if (property === "shelfId" && oldShelfId) state.store.locations.filter(location => location.shelf === oldShelfId).forEach(location => location.shelf = element.shelfId);
       if (property === "aisle" && element.shelfId) state.store.locations.filter(location => location.shelf === element.shelfId).forEach(location => location.aisle = String(element.aisle).padStart(2,"0"));
       renderMap(); renderInspector();
@@ -885,6 +910,9 @@
       if (action === "duplicate") duplicateSelected();
       if (action === "rotate") rotateSelected();
       if (action === "delete") deleteSelected();
+      if (action === "front" || action === "back") {
+        const element = selectedElement(); if (element) { rememberSnapshot(); state.store.elements = state.store.elements.filter(e => e.id !== element.id); state.store.elements[action === "front" ? "push" : "unshift"](element); renderMap(); }
+      }
       const productAction = event.target.closest("[data-product-action]")?.dataset.productAction;
       if (productAction === "locate") locateProduct(state.selectedProductId);
       if (productAction === "move") {
@@ -926,6 +954,7 @@
     }));
 
     window.addEventListener("keydown", event => {
+      if (dom.shell.hidden) return;
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
       if (event.code === "Space" && !typing) { state.spacePressed = true; dom.viewport.classList.add("is-panning"); event.preventDefault(); }
       if (typing) return;
@@ -943,10 +972,42 @@
   }
 
   function init() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("dawer-map-demo"));
+      if (saved && Array.isArray(saved.elements) && Array.isArray(saved.products) && Array.isArray(saved.locations)) state.store = saved;
+    } catch { /* Keep original storage intact if a saved document cannot be read. */ }
     renderTools(); renderProducts(); renderShoppingList(); renderMap(); renderInspector(); bindEvents(); updateHistoryButtons();
     requestAnimationFrame(() => fitToScreen(false));
-    setTimeout(() => showToast("المتجر التجريبي جاهز", "ابدأ ببناء المخطط أو توزيع المنتجات أو الملاحة من الشريط العلوي.", "✓"), 450);
+    $("#customerPreview").addEventListener("click", () => window.DawerShopper.show());
+    $("#editorToolsButton").addEventListener("click", () => dom.shell.classList.toggle("left-open"));
+    $("#editorPropertiesButton").addEventListener("click", () => dom.shell.classList.toggle("right-open"));
+    $("#shelfSide").addEventListener("change", renderShelfDetail);
+    $("#validateMap").addEventListener("click", () => showAdminReport("فحص المخطط", navigation.validate(state.store).map(x => x.message)));
+    $("#reportsButton").addEventListener("click", () => {
+      let reports = []; try { reports = JSON.parse(localStorage.getItem("dawer-reports-v1")) || []; } catch {}
+      showAdminReport("بلاغات محلية — لم تُرسل إلى خادم", reports.map(r => `${r.id} · ${productById(r.productId)?.name || r.productId} · ${locationCode(r.location)}`));
+    });
+    dom.productList.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { const card = event.target.closest("[data-product-id]"); if (card) { event.preventDefault(); card.click(); } } });
+    dom.elements.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const node = event.target.closest("[data-id]"); if (!node) return; event.preventDefault();
+      const pending = state.pendingProductId; selectElement(node.dataset.id);
+      if (elementById(node.dataset.id)?.type === "shelf") openShelfDetail(node.dataset.id, { pendingProductId: pending });
+    });
+    new MutationObserver(() => {
+      dom.inspector.querySelectorAll(".inspector-field").forEach((field, i) => { const input = field.querySelector("input"), label = field.querySelector("label"); if (input && label) { input.id = `editor-property-${i}`; label.htmlFor = input.id; } });
+    }).observe(dom.inspector, {childList:true});
+    dom.shelfElevation.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { const slot = event.target.closest(".position-slot"); if (slot) { event.preventDefault(); slot.click(); } } });
   }
+
+  function showAdminReport(title, messages) {
+    let dialog = $("#adminReport");
+    if (!dialog) { dialog = document.createElement("dialog"); dialog.id = "adminReport"; document.body.append(dialog); }
+    dialog.innerHTML = `<form method="dialog"><button aria-label="إغلاق">×</button></form><h2>${escapeHtml(title)}</h2><p>${messages.length} ملاحظات</p><ul>${messages.map(m => `<li>${escapeHtml(m)}</li>`).join("") || "<li>لا توجد ملاحظات</li>"}</ul>`;
+    dialog.showModal();
+  }
+
+  window.DawerEditor = { getStore: () => state.store, activate(mode) { dom.shell.classList.remove("left-open","right-open"); setMode(mode); renderProducts(); requestAnimationFrame(() => fitToScreen()); } };
 
   init();
 })();

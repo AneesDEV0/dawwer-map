@@ -7,9 +7,15 @@
   <title>داور ماب — خرائط المتاجر الداخلية</title>
   <meta name="description" content="نموذج تفاعلي لبناء خرائط السوبرماركت وتحديد مواقع المنتجات والملاحة الذكية داخل المتجر.">
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shopper.css">
 </head>
 <body>
-  <div class="app-shell" id="appShell">
+  <div id="bootStatus" role="status" class="boot-status"><b>داور ماب</b><p>جارٍ تحميل مخطط المتجر…</p></div>
+  <noscript>يتطلب النموذج تفعيل JavaScript لتشغيل البحث والخريطة.</noscript>
+  <div class="app-shell" id="appShell" hidden>
     <header class="topbar">
       <div class="brand" aria-label="داور ماب">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -19,10 +25,12 @@
       <nav class="mode-switcher" aria-label="مرحلة العمل">
         <button class="mode-button is-active" data-mode="build"><span>١</span> بناء المتجر</button>
         <button class="mode-button" data-mode="products"><span>٢</span> توزيع المنتجات</button>
-        <button class="mode-button" data-mode="navigate"><span>٣</span> التنقّل</button>
+        <button class="mode-button" data-mode="navigate"><span>٣</span> اختبار التنقّل</button>
       </nav>
 
       <div class="command-bar">
+        <button class="command-button" id="customerPreview">جرّب رحلة العميل ←</button>
+        <button class="command-button" id="validateMap">فحص المخطط</button>
         <button class="icon-button" id="undoButton" title="تراجع" aria-label="تراجع">↷</button>
         <button class="icon-button" id="redoButton" title="إعادة" aria-label="إعادة">↶</button>
         <button class="command-button help-command" id="helpButton">؟ دليل الاستخدام</button>
@@ -49,6 +57,8 @@
         <p class="panel-note">تلتصق العناصر بالشبكة تلقائيًا. انقر نقرًا مزدوجًا على أي رف لفتح تفاصيله.</p>
         <div class="tool-list" id="toolList" role="toolbar" aria-label="أدوات الخريطة"></div>
         <div class="mini-section">
+          <button class="button-dark" id="reportsButton">بلاغات المواقع المحفوظة</button>
+          <label class="toggle-row"><span>الالتقاط للشبكة</span><input type="checkbox" id="snapEnabled" checked></label>
           <span class="section-label">طبقات المخطط</span>
           <label class="toggle-row"><span><i class="layer-swatch shelf-swatch"></i> التجهيزات</span><input type="checkbox" checked data-layer="fixtures"></label>
           <label class="toggle-row"><span><i class="layer-swatch zone-swatch"></i> المناطق والتسميات</span><input type="checkbox" checked data-layer="zones"></label>
@@ -62,7 +72,8 @@
           <input id="productSearch" type="search" placeholder="ابحث عن منتج أو رمز SKU..." autocomplete="off">
           <kbd>Ctrl K</kbd>
         </label>
-        <div class="mode-guide compact"><b>طريقة التوزيع</b><span>اسحب المنتج إلى رف، ثم اختر الخانة الدقيقة.</span></div>
+        <div class="mode-guide compact"><b>طريقة التوزيع</b><span>اختر المنتج ثم اضغط على رف، أو اسحبه إليه. حدّد بعدها الواجهة والخانة.</span></div>
+        <label class="toggle-row placement-option"><span>إضافة موقع آخر للمنتج</span><input type="checkbox" id="additionalLocation"></label>
         <div class="catalog-meta"><span><b id="productCount">0</b> منتجًا</span><span>اسحب المنتج إلى رف</span></div>
         <div class="product-list" id="productList"></div>
       </div>
@@ -86,6 +97,7 @@
 
     <main class="workspace" id="workspace">
       <div class="canvas-toolbar">
+        <div class="editor-mobile-tools"><button id="editorToolsButton">الأدوات</button><button id="editorPropertiesButton">الخصائص</button></div>
         <div class="canvas-status">
           <span class="live-dot"></span>
           <span id="canvasStatus">الطابق 01 · المتجر التجريبي</span>
@@ -171,6 +183,7 @@
           <div class="shelf-stage-heading">
             <div><span class="eyebrow">الواجهة الأمامية / الجانب A</span><h2 id="shelfDetailTitle">الرف S-17</h2></div>
             <div class="shelf-config">
+              <label>الواجهة <select id="shelfSide"><option>A</option><option>B</option></select></label>
               <label>الأقسام <input id="sectionsInput" type="number" min="1" max="6" value="4"></label>
               <span>×</span>
               <label>المستويات <input id="levelsInput" type="number" min="1" max="6" value="5"></label>
@@ -220,5 +233,6 @@
   <script src="data.js"></script>
   <script src="navigation.js"></script>
   <script src="app.js"></script>
+  <script src="shopper.js" onerror="document.getElementById('bootStatus').innerHTML='تعذّر تحميل الواجهة. تحقّق من الاتصال ثم أعد تحميل الصفحة.'"></script>
 </body>
 </html>
